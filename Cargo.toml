@@ -1,0 +1,28 @@
+[package]
+name = "world-generator"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[dependencies]
+firecore-world-builder = { path = "../../pokemon-game/world/builder" }
+serde = { version = "1", features = ["derive"] }
+# reqwest = { version = "0.11", default-features = false, features = ["json", "blocking"] }
+attohttpc = { version = "0.18", features = ["json"] }
+tinystr = "0.4"
+either = { version = "1", features = ["serde"] }
+rayon = "1"
+dashmap = "5"
+
+ron = "0.7"
+serde_json = "1"
+bincode = "1.3"
