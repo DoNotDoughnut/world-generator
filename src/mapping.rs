@@ -1,6 +1,12 @@
-use std::{collections::HashMap, path::Path, ops::Deref};
+use std::{collections::HashMap, ops::Deref, path::Path};
 
-use firecore_world_builder::{world::MapLocation, worldlib::{character::npc::NpcTypeId, positions::Location}};
+use firecore_world_builder::{
+    builder::MapLocation,
+    world::{
+        character::npc::{group::NpcGroupId, NpcMovement},
+        positions::{Direction, Location},
+    },
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Deserialize, Serialize)]
@@ -9,7 +15,7 @@ pub struct NameMappings {
     pub map: MapMappings,
     pub palettes: PaletteMappings,
     pub music: HashMap<String, tinystr::TinyStr16>,
-    pub npcs: HashMap<String, NpcTypeId>,
+    pub npcs: NpcMappings,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -17,6 +23,12 @@ pub struct NameMappings {
 pub struct MapMappings {
     pub id: IdMappings,
     pub name: HashMap<String, String>,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+pub struct NpcMappings {
+    pub groups: HashMap<String, NpcGroupId>,
+    pub movement: HashMap<String, (NpcMovement, Direction)>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -41,11 +53,15 @@ impl Deref for IdMappings {
 
 impl From<IdMappingsFrom> for IdMappings {
     fn from(mappings: IdMappingsFrom) -> Self {
-        Self { inner: mappings.inner.into_iter().map(|(k, v)| (k, v.into())).collect() }
+        Self {
+            inner: mappings
+                .inner
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
     }
 }
-
-
 
 #[derive(Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

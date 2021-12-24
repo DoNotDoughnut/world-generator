@@ -15,14 +15,19 @@ panic = "abort"
 
 [dependencies]
 firecore-world-builder = { path = "../../pokemon-game/world/builder" }
+script-parser = { path = "script-parser" }
 serde = { version = "1", features = ["derive"] }
 # reqwest = { version = "0.11", default-features = false, features = ["json", "blocking"] }
 attohttpc = { version = "0.18", features = ["json"] }
 tinystr = "0.4"
 either = { version = "1", features = ["serde"] }
 rayon = "1"
-dashmap = "5"
+dashmap = { version = "5", features = ["serde"] }
+hashbrown = "0.9"
 
 ron = "0.7"
 serde_json = "1"
 bincode = "1.3"
+
+[workspace]
+members = ["script-parser"]

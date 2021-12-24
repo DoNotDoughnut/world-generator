@@ -7,4 +7,6 @@ pub struct JsonObjectEvents {
     pub y: isize,
     pub elevation: isize,
     pub movement_type: String,
+    // pub trainer_type:
+    pub script: String,
 }

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use firecore_world_builder::worldlib::{map::WorldMap, positions::Location};
+use firecore_world_builder::world::{map::WorldMap, positions::Location};
 
 pub fn serialize<P: AsRef<Path>>(root: P, maps: dashmap::DashMap<Location, WorldMap>) {
     let root = root.as_ref();

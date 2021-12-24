@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod object;
 pub mod warp;
+pub mod wild;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct JsonMap {

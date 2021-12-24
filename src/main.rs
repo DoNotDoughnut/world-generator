@@ -1,23 +1,30 @@
-use std::collections::HashMap;
+use dashmap::DashMap;
+use hashbrown::HashMap;
 
 use firecore_world_builder::{
     bin::BinaryMap,
-    worldlib::{
+    world::{
         character::{
-            npc::{Npc, NpcInteract, NpcMovement, Npcs},
+            npc::{Npc, NpcInteract, Npcs},
             Character,
         },
         map::{
             chunk::{Connection, WorldChunk},
             warp::{WarpDestination, WarpEntry, WarpId, WarpTransition},
+            wild::{WildEntry, WildType},
             PaletteId, WorldMap,
         },
+        pokedex::{item::Item, moves::Move, pokemon::Pokemon, BasicDex},
         positions::{BoundingBox, Coordinate, Destination, Direction, Location, Position},
     },
 };
-use map::{object::JsonObjectEvents, warp::JsonWarpEvent, JsonConnection, JsonMap};
+use map::{
+    object::JsonObjectEvents, warp::JsonWarpEvent, wild::JsonWildEncounters, JsonConnection,
+    JsonMap,
+};
 use mapping::NameMappings;
-use rayon::iter::{ParallelBridge, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
+use script_parser::Script;
 use serde_json::Value;
 use tinystr::{tinystr16, TinyStr16};
 
@@ -29,38 +36,62 @@ mod map;
 mod mapping;
 mod serializable;
 
+type Scripts = DashMap<String, Script>;
+type Messages = DashMap<String, Vec<Vec<String>>>;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct ParsedData {
+    maps: DashMap<String, JsonMap>,
+    wild: JsonWildEncounters,
+    dex: BasicDex<Pokemon>,
+    scripts: Scripts,
+    messages: Messages,
+}
+
 fn main() {
     let mappings = mapping::NameMappings::load();
 
-    let maps = match std::fs::read(PARSED)
+    let data = match std::fs::read(PARSED)
         .ok()
         .map(|bytes| bincode::deserialize(&bytes).ok())
         .flatten()
     {
-        Some(maps) => maps,
+        Some(data) => data,
         None => {
             eprintln!("Parsed map file cannot be read!");
             eprintln!("Generating new parsed map file...");
 
+            println!("Loading dex...");
+
+            let dex = std::fs::read("dex.bin").unwrap();
+
+            let (dex, ..) =
+                bincode::deserialize::<(BasicDex<Pokemon>, BasicDex<Move>, BasicDex<Item>)>(&dex)
+                    .unwrap();
+
             println!("Getting layouts...");
 
-            let layouts = attohttpc::get(
-        "https://raw.githubusercontent.com/pret/pokefirered/master/data/layouts/layouts.json",
-    )
-    .send()
-    .unwrap()
-    .json::<map::JsonMapLayouts>()
-    .unwrap();
+            let layouts = attohttpc::get(format!("{}/data/layouts/layouts.json", PATH))
+                .send()
+                .unwrap()
+                .json::<map::JsonMapLayouts>()
+                .unwrap();
 
             println!("Getting map groups...");
 
-            let maps = attohttpc::get(
-        "http://raw.githubusercontent.com/pret/pokefirered/master/data/maps/map_groups.json",
-    )
-    .send()
-    .unwrap()
-    .bytes()
-    .unwrap();
+            let maps = attohttpc::get(format!("{}/data/maps/map_groups.json", PATH))
+                .send()
+                .unwrap()
+                .bytes()
+                .unwrap();
+
+            println!("Getting wild encounters...");
+
+            let wild = attohttpc::get(format!("{}/src/data/wild_encounters.json", PATH))
+                .send()
+                .unwrap()
+                .json::<JsonWildEncounters>()
+                .unwrap();
 
             println!("Parsing map groups...");
 
@@ -81,22 +112,53 @@ fn main() {
 
             println!("Found {} map names", names.len());
 
-            let mut maps = HashMap::new();
+            let maps = DashMap::new();
+            let scripts = DashMap::new();
+            let messages = DashMap::new();
 
             let layouts = layouts
                 .layouts
                 .into_iter()
                 .flat_map(|l| l.inner.left())
                 .map(|l| (l.id.clone(), l))
-                .collect::<HashMap<_, _>>();
+                .collect::<DashMap<_, _>>();
 
-            for map in names {
+            names.into_par_iter().for_each(|map| {
                 let path = format!("{}/data/maps/{}/map.json", PATH, map);
+                let scripts_path = format!("{}/data/maps/{}/scripts.inc", PATH, map);
+                let text_path = format!("{}/data/maps/{}/text.inc", PATH, map);
+
                 let data = attohttpc::get(path)
                     .send()
-                    .unwrap()
+                    .unwrap_or_else(|err| panic!("Could not get {} with error {}", map, err))
                     .json::<map::JsonMapData>()
                     .unwrap_or_else(|err| panic!("Could not get {} with error {}", map, err));
+
+                if let Some(scripts_data) = attohttpc::get(scripts_path)
+                    .send()
+                    .ok()
+                    .map(|r| r.text().ok())
+                    .flatten()
+                {
+                    if let Ok(scripts_data) = script_parser::parse(&scripts_data) {
+                        for script in scripts_data {
+                            scripts.insert(script.name.clone(), script);
+                        }
+                    }
+                }
+
+                if let Some(message_data) = attohttpc::get(text_path)
+                    .send()
+                    .ok()
+                    .map(|r| r.text().ok())
+                    .flatten()
+                {
+                    if let Ok(message_data) = script_parser::parse_message_script(&message_data) {
+                        for message in message_data {
+                            messages.insert(message.name, message.text);
+                        }
+                    }
+                }
 
                 let layout = layouts
                     .get(&data.layout)
@@ -108,23 +170,73 @@ fn main() {
                 if let Some(removed) = maps.insert(data.id.clone(), JsonMap { data, layout }) {
                     panic!("Map {} was removed!", removed.data.name);
                 }
-            }
+            });
+
+            let data = ParsedData {
+                maps,
+                wild,
+                dex,
+                scripts,
+                messages,
+            };
 
             println!("Done parsing maps!");
 
-            std::fs::write("parsed.bin", bincode::serialize(&maps).unwrap()).unwrap();
+            std::fs::write("parsed.bin", bincode::serialize(&data).unwrap()).unwrap();
 
-            maps
+            data
         }
     };
 
-    let new_maps = dashmap::DashMap::<Location, WorldMap>::new();
+    let ParsedData {
+        maps,
+        wild,
+        dex,
+        scripts,
+        messages,
+    } = data;
+
+    println!("Converting wild encounters...");
+
+    eprintln!("TODO: fix fishing encounters");
+
+    let encounters = DashMap::new();
+
+    wild.wild_encounter_groups
+        .into_par_iter()
+        .flat_map(|g| g.encounters.into_par_iter())
+        .filter(|e| e.base_label[(e.base_label.len() - 7)..].eq_ignore_ascii_case("FireRed"))
+        .for_each(|e| {
+            let mut entries = HashMap::new();
+            if let Some(e) = e.land_mons {
+                entries.insert(WildType::Land, e.into(&dex));
+            }
+            if let Some(e) = e.water_mons {
+                entries.insert(WildType::Water, e.into(&dex));
+            }
+            if let Some(e) = e.rock_smash_mons {
+                entries.insert(WildType::Rock, e.into(&dex));
+            }
+            if let Some(e) = e.fishing_mons {
+                entries.insert(WildType::Fishing(0), e.into(&dex));
+            }
+            if entries.is_empty() {
+                encounters.insert(e.map, None);
+            } else {
+                encounters.insert(e.map, Some(entries));
+            }
+        });
+
+    println!("Created {} wild encounters", encounters.len());
+
+    let new_maps = DashMap::<Location, WorldMap>::new();
 
     println!("Converting maps...");
 
-    maps.values().par_bridge().for_each(|map| {
+    maps.iter().par_bridge().for_each(|map| {
+        let map = map.value();
         println!("Converting {}", map.data.name);
-        if let Some(map) = into_world_map(&mappings, &maps, map) {
+        if let Some(map) = into_world_map(&mappings, &scripts, &messages, &maps, &encounters, map) {
             if let Some(removed) = new_maps.insert(map.id, map) {
                 panic!("Duplicate world map id {}", removed.id);
             }
@@ -136,9 +248,14 @@ fn main() {
     serializable::serialize("maps", new_maps);
 }
 
+pub struct WildEncounter {}
+
 fn into_world_map(
     mappings: &NameMappings,
-    maps: &HashMap<String, JsonMap>,
+    scripts: &Scripts,
+    messages: &Messages,
+    maps: &DashMap<String, JsonMap>,
+    wild: &DashMap<String, Option<HashMap<WildType, WildEntry>>>,
     map: &JsonMap,
 ) -> Option<WorldMap> {
     let map_path = format!("{}/{}", PATH, map.layout.blockdata_filepath);
@@ -152,6 +269,12 @@ fn into_world_map(
         &border_data,
         map.layout.width * map.layout.height,
     )?;
+
+    let palettes = into_palettes(
+        mappings,
+        &map.layout.primary_tileset,
+        &map.layout.secondary_tileset,
+    );
 
     Some(WorldMap {
         id: mappings
@@ -180,15 +303,11 @@ fn into_world_map(
             .enumerate()
             .flat_map(|(index, warp)| into_world_warp(mappings, maps, warp, index))
             .collect(),
-        wild: None,
-        npcs: into_world_npcs(mappings, &map.data.objects),
+        wild: wild.remove(&map.data.id).map(|(.., v)| v).flatten(),
+        npcs: into_world_npcs(mappings, scripts, messages, &map.data.objects),
         width: map.layout.width as _,
         height: map.layout.height as _,
-        palettes: into_palettes(
-            mappings,
-            &map.layout.primary_tileset,
-            &map.layout.secondary_tileset,
-        ),
+        palettes,
         music: into_music(mappings, &map.data.music),
         settings: Default::default(),
         tiles: mapdata.tiles,
@@ -254,7 +373,7 @@ fn into_chunk(mappings: &NameMappings, connections: &[JsonConnection]) -> Option
 
 fn into_world_warp(
     mappings: &NameMappings,
-    maps: &HashMap<String, JsonMap>,
+    maps: &DashMap<String, JsonMap>,
     warp: &JsonWarpEvent,
     index: usize,
 ) -> Option<(WarpId, WarpEntry)> {
@@ -305,21 +424,40 @@ fn into_world_warp(
     Some((name, entry))
 }
 
-fn into_world_npcs(mappings: &NameMappings, events: &[JsonObjectEvents]) -> Npcs {
+fn into_world_npcs(
+    mappings: &NameMappings,
+    scripts: &Scripts,
+    messages: &Messages,
+    events: &[JsonObjectEvents],
+) -> Npcs {
     events
         .iter()
         .enumerate()
+        .par_bridge()
         .flat_map(|(index, event)| {
-            if let Some(npc_type) = mappings.npcs.get(&event.graphics_id) {
-                let (movement, direction) = match event.movement_type.as_str() {
-                    "MOVEMENT_TYPE_FACE_LEFT" => (NpcMovement::Still, Direction::Left),
-                    "MOVEMENT_TYPE_FACE_RIGHT" => (NpcMovement::Still, Direction::Right),
-                    "MOVEMENT_TYPE_FACE_UP" => (NpcMovement::Still, Direction::Up),
-                    "MOVEMENT_TYPE_FACE_DOWN" => (NpcMovement::Still, Direction::Down),
-                    _ => Default::default(),
-                };
+            if let Some(group) = mappings.npcs.groups.get(&event.graphics_id) {
+                let (movement, direction) = mappings
+                    .npcs
+                    .movement
+                    .get(&event.movement_type)
+                    .cloned()
+                    .unwrap_or_default();
 
-                let type_id = npc_type.parse().unwrap();
+                let mut interact = NpcInteract::Nothing;
+
+                if let Some(script) = scripts.get(&event.script) {
+                    let script = script.value();
+                    if script.commands.len() == 1 {
+                        let command = &script.commands[0];
+                        if &command.command == "msgbox" {
+                            let message = messages.get(&command.arguments[0]).unwrap();
+                            let message = message.value();
+                            interact = NpcInteract::Message(message.clone());
+                        }
+                    }
+                }
+
+                let group = group.parse().unwrap();
                 Some((
                     format!("npc_{}", index).parse().unwrap(),
                     Npc {
@@ -333,10 +471,10 @@ fn into_world_npcs(mappings: &NameMappings, events: &[JsonObjectEvents]) -> Npcs
                                 direction,
                             },
                         ),
-                        type_id,
+                        group,
                         movement,
                         origin: None,
-                        interact: NpcInteract::Nothing,
+                        interact,
                         trainer: None,
                     },
                 ))
