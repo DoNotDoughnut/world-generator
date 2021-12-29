@@ -546,7 +546,7 @@ fn into_world_npcs(
                                 transition: "default".parse().unwrap(),
                                 defeat: data.messages.get(defeat_id).unwrap().clone(),
                                 badge: None,
-                                disable: TrainerDisable::None,
+                                disable: TrainerDisable::DisableSelf,
                             });
 
                             if let Some(post) = script.commands.iter().find(|command| command.command == "msgbox") {
