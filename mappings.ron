@@ -1,8 +1,27 @@
 (
     map: (
         id: {
-            // "MAP_THREE_ISLAND_BERRY_FOREST": ()
+            "MAP_BIRTH_ISLAND_EXTERIOR": (
+                map: Some("birth_island"),
+                index: "exterior",
+            ),
+            "MAP_BIRTH_ISLAND_HARBOR": (
+                map: Some("birth_island"),
+                index: "harbor",
+            ),
             "MAP_CELADON_CITY": "celadon",
+            "MAP_CELADON_CITY_CONDOMINIUMS_1F": (
+                map: Some("condominiums"),
+                index: "1f",
+            ),
+            "MAP_CELADON_CITY_CONDOMINIUMS_2F": (
+                map: Some("condominiums"),
+                index: "2f",
+            ),
+            "MAP_CELADON_CITY_CONDOMINIUMS_3F": (
+                map: Some("condominiums"),
+                index: "3f",
+            ),
             "MAP_CELADON_CITY_CONDOMINIUMS_ROOF": (
                 map: Some("condominiums"),
                 index: "roof",
@@ -10,6 +29,34 @@
             "MAP_CELADON_CITY_CONDOMINIUMS_ROOF_ROOM": (
                 map: Some("condominiums"),
                 index: "roof_room",
+            ),
+            "MAP_CELADON_CITY_DEPARTMENT_STORE_1F": (
+                map: Some("department_store"),
+                index: "1f",
+            ),
+            "MAP_CELADON_CITY_DEPARTMENT_STORE_2F": (
+                map: Some("department_store"),
+                index: "2f",
+            ),
+            "MAP_CELADON_CITY_DEPARTMENT_STORE_3F": (
+                map: Some("department_store"),
+                index: "3f",
+            ),
+            "MAP_CELADON_CITY_DEPARTMENT_STORE_4F": (
+                map: Some("department_store"),
+                index: "4f",
+            ),
+            "MAP_CELADON_CITY_DEPARTMENT_STORE_5F": (
+                map: Some("department_store"),
+                index: "5f",
+            ),
+            "MAP_CELADON_CITY_DEPARTMENT_STORE_ELEVATOR": (
+                map: Some("department_store"),
+                index: "elevator",
+            ),
+            "MAP_CELADON_CITY_DEPARTMENT_STORE_ROOF": (
+                map: Some("department_store"),
+                index: "roof",
             ),
             "MAP_CELADON_CITY_GAME_CORNER": (
                 map: Some("celadon"),
@@ -23,6 +70,14 @@
                 map: Some("gym"),
                 index: "celadon",
             ),
+            "MAP_CELADON_CITY_HOTEL": (
+                map: Some("celadon"),
+                index: "hotel",
+            ),
+            "MAP_CELADON_CITY_HOUSE1": (
+                map: Some("celadon"),
+                index: "house1",
+            ),
             "MAP_CELADON_CITY_POKEMON_CENTER_1F": (
                 map: Some("pokemon_centers"),
                 index: "celadon",
@@ -30,6 +85,10 @@
             "MAP_CELADON_CITY_POKEMON_CENTER_2F": (
                 map: Some("pokemon_centers"),
                 index: "celadon_upper",
+            ),
+            "MAP_CELADON_CITY_RESTAURANT": (
+                map: Some("celadon"),
+                index: "restaurant",
             ),
             "MAP_CERULEAN_CAVE_1F": (
                 map: Some("cerulean_cave"),
@@ -48,18 +107,76 @@
                 map: Some("cerulean"),
                 index: "bike_shop",
             ),
+            "MAP_CERULEAN_CITY_GYM": (
+                map: Some("gym"),
+                index: "cerulean",
+            ),
+            "MAP_CERULEAN_CITY_HOUSE1": (
+                map: Some("cerulean"),
+                index: "house_1",
+            ),
+            "MAP_CERULEAN_CITY_HOUSE2": (
+                map: Some("cerulean"),
+                index: "house_2",
+            ),
+            "MAP_CERULEAN_CITY_HOUSE3": (
+                map: Some("cerulean"),
+                index: "house_3",
+            ),
+            "MAP_CERULEAN_CITY_HOUSE4": (
+                map: Some("cerulean"),
+                index: "house_4",
+            ),
+            "MAP_CERULEAN_CITY_MART": (
+                map: Some("pokemart"),
+                index: "cerulean",
+            ),
+            "MAP_CERULEAN_CITY_POKEMON_CENTER_1F": (
+                map: Some("pokemon_center"),
+                index: "cerulean",
+            ),
+            "MAP_CERULEAN_CITY_POKEMON_CENTER_2F": (
+                map: Some("pokemon_center"),
+                index: "cerulean_upper",
+            ),
+            "MAP_CERULEAN_CITY_HOUSE5": (
+                map: Some("cerulean"),
+                index: "house_5",
+            ),
+            "MAP_CINNABAR_ISLAND": "cinnabar",
+            "MAP_CERULEAN_ISLAND_GYM": (
+                map: Some("gym"),
+                index: "cinnabar",
+            ),
+            "MAP_CINNABER_ISLAND_MART": (
+                map: Some("pokemart"),
+                index: "cinnabar",
+            ),
             "MAP_CINNABAR_ISLAND_POKEMON_LAB_EXPERIMENT_ROOM": (
                 map: Some("pokemon_lab"),
                 index: "experiment_room",
             ),
+            "MAP_DIGLETTS_CAVE_B1F": "digletts_cave",
             "MAP_DIGLETTS_CAVE_NORTH_ENTRANCE": (
                 map: Some("digletts_cave"),
                 index: "north_entrance",
             ),
+            "MAP_DIGLETTS_CAVE_SOUTH_ENTRANCE": (
+                map: Some("digletts_cave"),
+                index: "south_entrance",
+            ),
+            "MAP_FIVE_ISLAND": "five_island",
             "MAP_FIVE_ISLAND_ROCKET_WAREHOUSE": (
                 map: Some("five_island"),
                 index: "rocket_warehouse",
             ),
+            "MAP_FOUR_ISLAND": "four_island",
+            "MAP_FUCHSIA_CITY": "fuchsia",
+            "MAP_INDIGO_PLATEAU_EXTERIOR": (
+                map: Some("indigo_plateau"),
+                index: "exterior",
+            ),
+            "MAP_LAVENDER_TOWN": "lavender",
             "MAP_MT_EMBER_RUBY_PATH_B1F_STAIRS": (
                 map: Some("mt_ember"),
                 index: "ruby_b1f_stairs"
@@ -69,7 +186,11 @@
                 map: Some("pallet"),
                 index: "player_room",
             ),
-            "MAP_PEWTER_TOWN": "pewter",
+            "MAP_PALLET_TOWN_PROFESSOR_OAKS_LAB": (
+                map: Some("pallet"),
+                index: "oaks_lab",
+            ),
+            "MAP_PEWTER_CITY": "pewter",
             "MAP_POKEMON_LEAGUE_AGATHAS_ROOM": (
                 map: Some("pokemon_league"),
                 index: "agathas_room",
@@ -160,6 +281,9 @@
                 map: Some("saffron"),
                 index: "mr_psychics",
             ),
+            "MAP_SEVEN_ISLAND": (
+                index: "seven_island",
+            ),
             "MAP_SEVEN_ISLAND_HOUSE_ROOM1": (
                 map: Some("seven_island"),
                 index: "house_room_1",
@@ -196,7 +320,18 @@
                 map: Some("tanoby_ruins"),
                 index: "weepth_chamber",
             ),
+            "MAP_SIX_ISLAND": (
+                index: "six_island",
+            ),
+            "MAP_SIX_ISLAND_RUIN_VALLEY": (
+                map: Some("six_island"),
+                index: "ruin_valley",
+            ),
             "MAP_VIRIDIAN_CITY": "viridian",
+            "MAP_VIRIDIAN_CITY_GYM": (
+                map: Some("gym"),
+                index: "viridian",
+            ),
             "MAP_VIRIDIAN_FOREST": "viridian_forest",
             "MAP_UNDERGROUND_PATH_EAST_ENTRANCE": (
                 map: Some("underground_path"),
@@ -235,6 +370,7 @@
             "CeruleanCave_B1F": "CeruleanCave B1F",
             "CeruleanCity": "Cerulean City",
             "CeruleanCity_BikeShop": "Bike Shop",
+            "SixIsland_RuinValley": "Ruin Valley",
             "Route1": "Route 1",
             "Route2": "Route 2",
             "Route2_EastBuilding": "Route 2 East Building",
@@ -253,6 +389,8 @@
             "Route13": "Route 13",
             "Route14": "Route 14",
             "SaffronCity": "Saffron City",
+            "ViridianCity": "Viridian City",
+            "ViridianCity_Gym": "Viridian Gym",
             "ViridianForest": "Viridian Forest",
         }
     ),

@@ -57,7 +57,7 @@ pub struct JsonWildPokemon {
 }
 
 impl JsonWildEncounterType {
-    pub fn into(self, dex: &BasicDex<Pokemon>) -> WildEntry {
+    pub fn into(self, pokedex: &BasicDex<Pokemon>) -> WildEntry {
         WildEntry {
             ratio: self.encounter_rate,
             encounters: self
@@ -74,7 +74,7 @@ impl JsonWildEncounterType {
                             }
                         })
                     }
-                    dex.try_get_named(&species)
+                    pokedex.try_get_named(&species)
                         .map(|species| WildPokemon {
                             species: species.id,
                             levels: p.min_level..=p.max_level,

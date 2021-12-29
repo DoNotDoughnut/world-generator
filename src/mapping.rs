@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ops::Deref, path::Path};
 
 use firecore_world_builder::{
-    builder::MapLocation,
+    builder::location::MapLocation,
     world::{
         character::npc::{group::NpcGroupId, NpcMovement},
         positions::{Direction, Location},

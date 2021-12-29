@@ -1,15 +1,22 @@
 use std::path::Path;
 
 use firecore_world_builder::world::{map::WorldMap, positions::Location};
+use rayon::iter::{ParallelBridge, ParallelIterator};
 
-pub fn serialize<P: AsRef<Path>>(root: P, maps: dashmap::DashMap<Location, WorldMap>) {
+pub fn serialize<P: AsRef<Path>>(root: P, maps: &dashmap::DashMap<Location, WorldMap>) {
     let root = root.as_ref();
 
-    let root = root.join("files");
+    let files = root.join("files");
 
-    std::fs::create_dir_all(&root).unwrap();
+    let copies = root.join("copies");
 
-    for (location, map) in maps {
+    std::fs::create_dir_all(&files).unwrap();
+
+    std::fs::create_dir_all(&copies).unwrap();
+
+    maps.iter().par_bridge().for_each(|r| {
+        let location = r.key();
+        let map = r.value();
         let data = bincode::serialize(&map).unwrap();
 
         let path = match location.map {
@@ -17,9 +24,17 @@ pub fn serialize<P: AsRef<Path>>(root: P, maps: dashmap::DashMap<Location, World
             None => format!("{}.world", location.index),
         };
 
-        let path = root.join(path);
+        let file = files.join(&path);
 
-        std::fs::write(path, &data).unwrap();
+        std::fs::write(file, &data).unwrap();
+
+        let copy = copies.join(&path);
+
+        let str = ron::ser::to_string_pretty(&map, Default::default()).unwrap();
+
+        std::fs::write(copy, str.as_bytes()).unwrap();
+
+
         // std::fs::create_dir_all(&path).unwrap();
 
         // {
@@ -81,5 +96,5 @@ pub fn serialize<P: AsRef<Path>>(root: P, maps: dashmap::DashMap<Location, World
         // let npcs = path.join("npcs");
 
         // std::fs::create_dir(&npcs).unwrap();
-    }
+    });
 }

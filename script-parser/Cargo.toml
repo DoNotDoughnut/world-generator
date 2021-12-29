@@ -6,5 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# hashbrown = "0.9"
+hashbrown = "0.9"
 serde = { version = "1", features = ["derive"] }
+# firecore-pokedex = { git = "https://github.com/fiirecore/pokedex", rev = "0efc1ce" }

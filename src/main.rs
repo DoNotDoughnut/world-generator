@@ -5,16 +5,25 @@ use firecore_world_builder::{
     bin::BinaryMap,
     world::{
         character::{
-            npc::{Npc, NpcInteract, Npcs},
+            npc::{
+                trainer::{NpcTrainer, TrainerDisable},
+                Npc, NpcInteract, Npcs,
+            },
+            trainer::Trainer,
             Character,
         },
         map::{
-            chunk::{Connection, WorldChunk},
-            warp::{WarpDestination, WarpEntry, WarpId, WarpTransition},
+            chunk::{ChunkConnections, Connection, WorldChunk},
+            warp::{WarpDestination, WarpEntry, WarpId},
             wild::{WildEntry, WildType},
             PaletteId, WorldMap,
         },
-        pokedex::{item::Item, moves::Move, pokemon::Pokemon, BasicDex},
+        pokedex::{
+            item::Item,
+            moves::{owned::SavedMove, Move},
+            pokemon::{owned::SavedPokemon, stat::StatSet, Pokemon},
+            BasicDex,
+        },
         positions::{BoundingBox, Coordinate, Destination, Direction, Location, Position},
     },
 };
@@ -24,7 +33,7 @@ use map::{
 };
 use mapping::NameMappings;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
-use script_parser::Script;
+use script_parser::inc::Script;
 use serde_json::Value;
 use tinystr::{tinystr16, TinyStr16};
 
@@ -38,20 +47,26 @@ mod serializable;
 
 type Scripts = DashMap<String, Script>;
 type Messages = DashMap<String, Vec<Vec<String>>>;
+type Trainers = HashMap<String, script_parser::trainer::Trainer>;
+type Parties = HashMap<String, Vec<script_parser::trainer::party::TrainerPokemon>>;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct ParsedData {
     maps: DashMap<String, JsonMap>,
     wild: JsonWildEncounters,
-    dex: BasicDex<Pokemon>,
+    pokedex: BasicDex<Pokemon>,
+    movedex: BasicDex<Move>,
+    itemdex: BasicDex<Item>,
     scripts: Scripts,
     messages: Messages,
+    trainers: Trainers,
+    parties: Parties,
 }
 
 fn main() {
     let mappings = mapping::NameMappings::load();
 
-    let data = match std::fs::read(PARSED)
+    let mut data = match std::fs::read(PARSED)
         .ok()
         .map(|bytes| bincode::deserialize(&bytes).ok())
         .flatten()
@@ -65,9 +80,27 @@ fn main() {
 
             let dex = std::fs::read("dex.bin").unwrap();
 
-            let (dex, ..) =
+            let (pokedex, movedex, itemdex) =
                 bincode::deserialize::<(BasicDex<Pokemon>, BasicDex<Move>, BasicDex<Item>)>(&dex)
                     .unwrap();
+
+            println!("Getting trainers...");
+
+            let trainers = attohttpc::get(format!("{}/src/data/trainers.h", PATH))
+                .send()
+                .unwrap()
+                .text_utf8()
+                .unwrap();
+            let trainers = script_parser::trainer::parse_trainers(&trainers).unwrap();
+
+            println!("Getting trainer parties...");
+
+            let parties = attohttpc::get(format!("{}/src/data/trainer_parties.h", PATH))
+                .send()
+                .unwrap()
+                .text_utf8()
+                .unwrap();
+            let parties = script_parser::trainer::party::parse_parties(&parties).unwrap();
 
             println!("Getting layouts...");
 
@@ -140,7 +173,7 @@ fn main() {
                     .map(|r| r.text().ok())
                     .flatten()
                 {
-                    if let Ok(scripts_data) = script_parser::parse(&scripts_data) {
+                    if let Ok(scripts_data) = script_parser::inc::parse(&scripts_data) {
                         for script in scripts_data {
                             scripts.insert(script.name.clone(), script);
                         }
@@ -153,7 +186,9 @@ fn main() {
                     .map(|r| r.text().ok())
                     .flatten()
                 {
-                    if let Ok(message_data) = script_parser::parse_message_script(&message_data) {
+                    if let Ok(message_data) =
+                        script_parser::inc::parse_message_script(&message_data)
+                    {
                         for message in message_data {
                             messages.insert(message.name, message.text);
                         }
@@ -175,9 +210,13 @@ fn main() {
             let data = ParsedData {
                 maps,
                 wild,
-                dex,
+                pokedex,
+                movedex,
+                itemdex,
                 scripts,
                 messages,
+                trainers,
+                parties,
             };
 
             println!("Done parsing maps!");
@@ -188,37 +227,30 @@ fn main() {
         }
     };
 
-    let ParsedData {
-        maps,
-        wild,
-        dex,
-        scripts,
-        messages,
-    } = data;
-
     println!("Converting wild encounters...");
 
     eprintln!("TODO: fix fishing encounters");
 
     let encounters = DashMap::new();
 
-    wild.wild_encounter_groups
-        .into_par_iter()
+    let wild = std::mem::take(&mut data.wild.wild_encounter_groups);
+
+    wild.into_par_iter()
         .flat_map(|g| g.encounters.into_par_iter())
         .filter(|e| e.base_label[(e.base_label.len() - 7)..].eq_ignore_ascii_case("FireRed"))
         .for_each(|e| {
             let mut entries = HashMap::new();
             if let Some(e) = e.land_mons {
-                entries.insert(WildType::Land, e.into(&dex));
+                entries.insert(WildType::Land, e.into(&data.pokedex));
             }
             if let Some(e) = e.water_mons {
-                entries.insert(WildType::Water, e.into(&dex));
+                entries.insert(WildType::Water, e.into(&data.pokedex));
             }
             if let Some(e) = e.rock_smash_mons {
-                entries.insert(WildType::Rock, e.into(&dex));
+                entries.insert(WildType::Rock, e.into(&data.pokedex));
             }
             if let Some(e) = e.fishing_mons {
-                entries.insert(WildType::Fishing(0), e.into(&dex));
+                entries.insert(WildType::Fishing(0), e.into(&data.pokedex));
             }
             if entries.is_empty() {
                 encounters.insert(e.map, None);
@@ -233,10 +265,10 @@ fn main() {
 
     println!("Converting maps...");
 
-    maps.iter().par_bridge().for_each(|map| {
+    data.maps.iter().par_bridge().for_each(|map| {
         let map = map.value();
         println!("Converting {}", map.data.name);
-        if let Some(map) = into_world_map(&mappings, &scripts, &messages, &maps, &encounters, map) {
+        if let Some(map) = into_world_map(&mappings, &data, &encounters, map) {
             if let Some(removed) = new_maps.insert(map.id, map) {
                 panic!("Duplicate world map id {}", removed.id);
             }
@@ -245,17 +277,13 @@ fn main() {
         }
     });
 
-    serializable::serialize("maps", new_maps);
+    serializable::serialize("maps", &new_maps);
 }
-
-pub struct WildEncounter {}
 
 fn into_world_map(
     mappings: &NameMappings,
-    scripts: &Scripts,
-    messages: &Messages,
-    maps: &DashMap<String, JsonMap>,
-    wild: &DashMap<String, Option<HashMap<WildType, WildEntry>>>,
+    data: &ParsedData,
+    encounters: &DashMap<String, Option<HashMap<WildType, WildEntry>>>,
     map: &JsonMap,
 ) -> Option<WorldMap> {
     let map_path = format!("{}/{}", PATH, map.layout.blockdata_filepath);
@@ -301,10 +329,10 @@ fn into_world_map(
             .warps
             .iter()
             .enumerate()
-            .flat_map(|(index, warp)| into_world_warp(mappings, maps, warp, index))
+            .flat_map(|(index, warp)| into_world_warp(mappings, &data.maps, warp, index))
             .collect(),
-        wild: wild.remove(&map.data.id).map(|(.., v)| v).flatten(),
-        npcs: into_world_npcs(mappings, scripts, messages, &map.data.objects),
+        wild: encounters.remove(&map.data.id).map(|(.., v)| v).flatten(),
+        npcs: into_world_npcs(mappings, data, &map.data.objects),
         width: map.layout.width as _,
         height: map.layout.height as _,
         palettes,
@@ -318,7 +346,7 @@ fn into_world_map(
             mapdata.border.tiles[2],
             mapdata.border.tiles[3],
         ],
-        scripts: Default::default(),
+        // scripts: Default::default(),
     })
 }
 
@@ -339,35 +367,34 @@ fn truncate_id(id: &str) -> TinyStr16 {
     .unwrap()
 }
 
-fn into_chunk(mappings: &NameMappings, connections: &[JsonConnection]) -> Option<WorldChunk> {
-    match connections.is_empty() {
+fn into_chunk(mappings: &NameMappings, json_connections: &[JsonConnection]) -> Option<WorldChunk> {
+    match json_connections.is_empty() {
         true => None,
-        false => Some(WorldChunk {
-            connections: connections
-                .iter()
-                .flat_map(|connection| {
-                    let direction = match connection.direction.as_str() {
-                        "left" => Direction::Left,
-                        "right" => Direction::Right,
-                        "up" => Direction::Up,
-                        "down" => Direction::Down,
-                        _ => unreachable!(),
-                    };
-                    Some((
-                        direction,
-                        Connection(
-                            mappings
-                                .map
-                                .id
-                                .get(&connection.map)
-                                .cloned()
-                                .unwrap_or_else(|| loc(&connection.map)),
-                            connection.offset as _,
-                        ),
-                    ))
-                })
-                .collect(),
-        }),
+        false => {
+            let mut connections = ChunkConnections::new();
+            for connection in json_connections {
+                let direction = match connection.direction.as_str() {
+                    "left" => Direction::Left,
+                    "right" => Direction::Right,
+                    "up" => Direction::Up,
+                    "down" => Direction::Down,
+                    _ => unreachable!(),
+                };
+                if !connections.contains_key(&direction) {
+                    connections.insert(direction, Vec::new());
+                }
+                connections.get_mut(&direction).unwrap().push(Connection(
+                    mappings
+                        .map
+                        .id
+                        .get(&connection.map)
+                        .cloned()
+                        .unwrap_or_else(|| loc(&connection.map)),
+                    connection.offset as _,
+                ))
+            }
+            Some(WorldChunk { connections })
+        }
     }
 }
 
@@ -399,7 +426,7 @@ fn into_world_warp(
         },
         destination: WarpDestination {
             location: destination,
-            position: {
+            destination: {
                 let w = &maps
                     .get(&warp.destination)?
                     // .unwrap_or_else(|| panic!("Cannot get map at {}", warp.destination))
@@ -413,11 +440,11 @@ fn into_world_warp(
                     direction: None,
                 }
             },
-            transition: WarpTransition {
-                move_on_exit: false,
-                warp_on_tile: true,
-                change_music: true,
-            },
+            // transition: WarpTransition {
+            //     move_on_exit: false,
+            //     warp_on_tile: true,
+            //     change_music: true,
+            // },
         },
     };
 
@@ -426,8 +453,7 @@ fn into_world_warp(
 
 fn into_world_npcs(
     mappings: &NameMappings,
-    scripts: &Scripts,
-    messages: &Messages,
+    data: &ParsedData,
     events: &[JsonObjectEvents],
 ) -> Npcs {
     events
@@ -445,16 +471,97 @@ fn into_world_npcs(
 
                 let mut interact = NpcInteract::Nothing;
 
-                if let Some(script) = scripts.get(&event.script) {
+                let mut trainer = None;
+                let mut name = String::new();
+
+                if let Some(script) = data.scripts.get(&event.script) {
                     let script = script.value();
                     if script.commands.len() == 1 {
                         let command = &script.commands[0];
                         if &command.command == "msgbox" {
-                            let message = messages.get(&command.arguments[0]).unwrap();
+                            let message = data.messages.get(&command.arguments[0]).unwrap();
                             let message = message.value();
                             interact = NpcInteract::Message(message.clone());
                         }
                     }
+
+                    if !(event.trainer_type.eq_ignore_ascii_case("TRAINER_TYPE_NONE")) {
+                        if let Some(battle) = script.commands.iter().find(|command| {
+                            command.command.eq_ignore_ascii_case("trainerbattle_single")
+                        }) {
+                            let mut args = battle.arguments.iter();
+                            let id = args.next().unwrap();
+                            let encounter_id = args.next().unwrap();
+                            let defeat_id = args.next().unwrap();
+                            let t = data.trainers.get(id).unwrap();
+                            let party = data.parties.get(&t.party).unwrap();
+                            let sight = event.trainer_sight_or_berry_tree_id.parse().unwrap();
+                            if let Some(trainer_name) = &t.trainer_name {
+                                name = trainer_name.clone();
+                            }
+                            trainer = Some(NpcTrainer {
+                                character: Trainer {
+                                    party: party
+                                        .iter()
+                                        .flat_map(|p| {
+                                            let id = &p.species[8..];
+                                            data.pokedex.try_get_named(id).map(|pokemon| {
+                                                let mut saved = SavedPokemon::generate(
+                                                    &mut rand::thread_rng(),
+                                                    pokemon.id,
+                                                    p.level,
+                                                    None,
+                                                    Some(StatSet::uniform(p.ivs / 6)),
+                                                );
+                                                if let Some(item) = &p.item {
+                                                    let id = item.replace('_', " ");
+                                                    if let Some(item) =
+                                                        data.itemdex.try_get_named(&id)
+                                                    {
+                                                        saved.item = Some(item.id);
+                                                    }
+                                                }
+                                                if let Some(moves) = p.moves.as_ref() {
+                                                    for m in moves {
+                                                        let id = m.replace('_', " ");
+                                                        if let Some(m) =
+                                                            data.movedex.try_get_named(&id)
+                                                        {
+                                                            saved.moves.push(SavedMove::from(m.id));
+                                                        }
+                                                    }
+                                                }
+                                                saved
+                                            })
+                                        })
+                                        .collect(),
+                                    bag: Default::default(), //trainer.items.in,
+                                    worth: 0,
+                                },
+                                tracking: match sight == 0 {
+                                    true => None,
+                                    false => Some(sight),
+                                },
+                                encounter: data.messages.get(encounter_id).unwrap().clone(),
+                                transition: "default".parse().unwrap(),
+                                defeat: data.messages.get(defeat_id).unwrap().clone(),
+                                badge: None,
+                                disable: TrainerDisable::None,
+                            });
+
+                            if let Some(post) = script.commands.iter().find(|command| command.command == "msgbox") {
+                                let id = &post.arguments[0];
+                                let message = data.messages.get(id).unwrap();
+                                let message = message.value();
+                                interact = NpcInteract::Message(message.clone());
+                            }
+
+                        }
+                    }
+                }
+
+                if name.is_empty() {
+                    name = format!("NPC {}-{}", event.x, event.y);
                 }
 
                 let group = group.parse().unwrap();
@@ -462,20 +569,21 @@ fn into_world_npcs(
                     format!("npc_{}", index).parse().unwrap(),
                     Npc {
                         character: Character::new(
-                            format!("NPC {}-{}", event.x, event.y),
+                            name,
                             Position {
                                 coords: Coordinate {
                                     x: event.x as _,
                                     y: event.y as _,
                                 },
                                 direction,
+                                elevation: None,
                             },
                         ),
                         group,
                         movement,
                         origin: None,
                         interact,
-                        trainer: None,
+                        trainer,
                     },
                 ))
             } else {
