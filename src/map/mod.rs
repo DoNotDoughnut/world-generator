@@ -16,14 +16,21 @@ pub struct JsonMapData {
     pub name: String,
     pub layout: String,
     pub music: String,
-    // pub music: String,
+    pub region_map_section: String,
+    pub requires_flash: bool,
+    pub weather: String,
+    pub map_type: String,
+    pub allow_cycling: bool,
+    pub allow_escaping: bool,
+    pub allow_running: bool,
+    pub show_map_name: bool,
     pub floor_number: isize,
-
+    pub battle_scene: String,
     pub connections: Option<Vec<JsonConnection>>,
-    #[serde(rename = "object_events")]
-    pub objects: Vec<object::JsonObjectEvents>,
-    #[serde(rename = "warp_events")]
-    pub warps: Vec<warp::JsonWarpEvent>,
+    pub object_events: Vec<object::JsonObjectEvent>,
+    pub warp_events: Vec<warp::JsonWarpEvent>,
+    // pub coord_events: Vec<>,
+    pub bg_events: Vec<object::JsonBgEvent>,
 }
 
 

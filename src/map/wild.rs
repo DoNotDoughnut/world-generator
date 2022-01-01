@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use firecore_world_builder::world::{
     map::wild::{WildEntry, WildPokemon},

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct JsonObjectEvents {
+pub struct JsonObjectEvent {
     pub graphics_id: String,
     pub x: isize,
     pub y: isize,
@@ -13,4 +13,21 @@ pub struct JsonObjectEvents {
     pub trainer_sight_or_berry_tree_id: String,
     pub script: String,
     pub flag: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct JsonBgEvent {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub x: i32,
+    pub y: i32,
+    pub elevation: u8,
+    // Item section
+    pub item: Option<String>,
+    pub flag: Option<String>,
+    pub quantity: Option<usize>,
+    pub underfoot: Option<bool>,
+    // Sign section
+    pub player_facing_dir: Option<String>,
+    pub script: Option<String>,
 }

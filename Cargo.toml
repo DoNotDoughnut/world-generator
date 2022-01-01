@@ -3,8 +3,6 @@ name = "world-generator"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [profile.dev.package."*"]
 opt-level = 3
 
@@ -14,7 +12,9 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-firecore-world-builder = { git = "https://github.com/fiirecore-game/world", rev = "ba4e94b", package = "firecore-world-builder" }
+firecore-world-builder = { git = "https://github.com/fiirecore-game/world", rev = "a6f7c7e", package = "firecore-world-builder" }
+# firecore-world-builder = { path = "../../firecore/world/builder" }
+
 script-parser = { path = "script-parser" }
 serde = { version = "1", features = ["derive"] }
 # reqwest = { version = "0.11", default-features = false, features = ["json", "blocking"] }
@@ -22,8 +22,8 @@ attohttpc = { version = "0.18", features = ["json"] }
 tinystr = "0.4"
 either = { version = "1", features = ["serde"] }
 rayon = "1"
-dashmap = { version = "5", features = ["serde"] }
-hashbrown = "0.9"
+dashmap = { version = "5", features = ["serde", "rayon"] }
+hashbrown = { version = "0.9", features = ["rayon"] }
 rand = "0.8"
 
 ron = "0.7"

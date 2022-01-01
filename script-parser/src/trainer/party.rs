@@ -89,7 +89,7 @@ pub fn parse_parties(file: &str) -> Result<HashMap<String, Vec<TrainerPokemon>>,
                                         .find(|(.., c)| c == &'}')
                                         .ok_or_else(|| TrainerError::BracketParse(line, "moves"))?;
                                 let array = &right[lb + 1..rb];
-                                pokemon.moves = Some(array.split(',').map(str::to_owned).collect());
+                                pokemon.moves = Some(array.split(',').map(str::trim).map(str::to_owned).collect());
                             },
                             ".heldItem" => pokemon.item = Some(right.to_owned()),
                             field => return Err(TrainerError::UnknownField(line, field.to_owned())),
