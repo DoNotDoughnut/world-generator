@@ -1,10 +1,11 @@
-use std::{ops::Deref, path::Path};
+use std::ops::Deref;
 
 use firecore_world_builder::{
     builder::structs::BuilderLocation,
     world::{
+        audio::{SoundId, SoundVariant},
         character::npc::group::NpcGroupId,
-        map::{object::ObjectId, TransitionId},
+        map::{object::ObjectId, PaletteId, TileId, TransitionId},
         positions::{Direction, Location},
     },
 };
@@ -19,6 +20,7 @@ pub struct NameMappings {
     pub music: HashMap<String, tinystr::TinyStr16>,
     pub npcs: NpcMappings,
     pub objects: ObjectMappings,
+    pub audio: AudioMappings,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -32,8 +34,9 @@ pub struct MapMappings {
 #[derive(Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PaletteMappings {
-    pub primary: HashMap<String, u8>,
-    pub secondary: HashMap<String, u8>,
+    pub primary: HashMap<String, PaletteId>,
+    pub secondary: HashMap<String, PaletteId>,
+    pub sizes: HashMap<PaletteId, TileId>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -46,6 +49,11 @@ pub struct NpcMappings {
 #[derive(Default, Deserialize, Serialize)]
 pub struct ObjectMappings {
     pub objects: HashMap<String, ObjectId>,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+pub struct AudioMappings {
+    pub sounds: HashMap<String, (SoundId, SoundVariant)>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -76,22 +84,6 @@ impl From<IdMappingsFrom> for IdMappings {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-        }
-    }
-}
-
-impl NameMappings {
-    pub fn load() -> Self {
-        let path = Path::new("./mappings.ron");
-
-        match std::fs::read_to_string(path) {
-            Ok(data) => match ron::from_str(&data) {
-                Ok(mappings) => mappings,
-                Err(err) => panic!("Cannot deserialize mappings with error {}", err),
-            },
-            Err(err) => {
-                panic!("Could not load mappings file with error {}", err)
-            }
         }
     }
 }

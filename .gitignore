@@ -1,4 +1,5 @@
 /Cargo.lock
-/maps
 /parsed.bin
 /target
+
+/output

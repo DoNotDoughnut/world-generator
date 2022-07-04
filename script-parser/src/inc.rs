@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 // #[cfg(test)]
 // mod tests {
@@ -13,68 +13,72 @@ use serde::{Serialize, Deserialize};
 pub fn parse(script: &str) -> Result<Vec<Script>, Error> {
     let mut scripts = Vec::new();
     let mut aliases = HashMap::new();
-    let mut lines = script.lines().enumerate();
-    while let Some((line, text)) = lines.next() {
+    let mut lines = script.lines().enumerate().peekable();
+    'lines: while let Some((line, text)) = lines.next() {
         let mut args = text.split_whitespace();
         if let Some(arg0) = args.next() {
             match arg0 {
-                ".set" => {
+                ".set" | ".equ" => {
                     let name = args.next().ok_or(Error::SetName(line))?;
                     let variable = args.next().ok_or(Error::SetVariable(line))?;
                     aliases.insert(name.to_owned(), variable.to_owned());
                 }
                 name => {
-                    if name.trim().len() < 4 || name.starts_with('@') {
-                        continue;
+                    {
+                        let name = name.trim();
+                        if name.len() < 4
+                            || name
+                                .split_once('@')
+                                .map(|(l, ..)| l.trim().len() < 2)
+                                .unwrap_or_default()
+                            || name == ".align"
+                        {
+                            continue 'lines;
+                        }
                     }
                     // let name = args.next().ok_or(Error::ScriptName(line))?;
                     let end = &name.get(name.len().saturating_sub(2)..);
-                    if !end.map(|end| end.eq_ignore_ascii_case("::")).unwrap_or_default() {
-                        return Err(Error::ScriptName(line));
-                    }
-                    let name = &name[..name.len() - 2];
-                    let at = args.next();
-                    if !at
-                        .map(|at| at.eq_ignore_ascii_case("@"))
+                    if !end
+                        .map(|end| end.eq_ignore_ascii_case("::"))
                         .unwrap_or_default()
                     {
-                        return Err(Error::ScriptName(line));
+                        return Err(Error::ScriptName(line, ScriptNameReason::Name));
                     }
-                    let location = args.next().ok_or(Error::ScriptLocation(line))?;
-                    let location = Location::from_str_radix(location, 16)
-                        .map_err(|err| Error::MalformedLocation(err, line))?;
+                    let name = &name[..name.len() - 2];
+                    let location = location(&mut args, line)?;
                     let mut commands = Vec::new();
+                    // let mut finished = None;
                     'commands: loop {
                         match lines.next() {
-                            Some((line, text)) => {
-                                match text.trim() {
-                                    "end" | "return" | "step_end" | ".endm" | "" => break 'commands,
-                                    _ => (),
-                                }
-                                let command = text
-                                    .split_whitespace()
-                                    .next()
-                                    .ok_or(Error::NoCommand(line))?;
-                                match command {
-                                    ".byte" | ".2byte" => break 'commands,
-                                    _ => (),
+                            Some((.., text)) => {
+                                if lines
+                                    .peek()
+                                    .map(|(.., next)| next.contains("::"))
+                                    .unwrap_or(true)
+                                {
+                                    // println!("broke after {:?} lines", finished);
+                                    break 'commands;
                                 }
 
-                                let arguments = text
-                                    .split_once(command)
-                                    .map(|(.., arguments)| {
-                                        arguments
-                                            .split(',')
-                                            .map(str::trim)
-                                            .map(|s| aliases.get(s).map(|s| s.as_str()).unwrap_or(s))
-                                            .map(str::to_owned)
-                                            .collect()
-                                    })
-                                    .unwrap_or_default();
-                                commands.push(Command {
-                                    command: command.to_owned(),
-                                    arguments,
-                                });
+                                if let Some(command) = text.split_whitespace().next() {
+                                    let arguments = text
+                                        .split_once(command)
+                                        .map(|(.., arguments)| {
+                                            arguments
+                                                .split(',')
+                                                .map(str::trim)
+                                                .map(|s| {
+                                                    aliases.get(s).map(|s| s.as_str()).unwrap_or(s)
+                                                })
+                                                .map(str::to_owned)
+                                                .collect()
+                                        })
+                                        .unwrap_or_default();
+                                    commands.push(Command {
+                                        command: command.to_owned(),
+                                        arguments,
+                                    });
+                                }
                             }
                             None => return Err(Error::EndOfFile("script")),
                         }
@@ -95,7 +99,8 @@ pub fn parse(script: &str) -> Result<Vec<Script>, Error> {
 }
 
 pub fn parse_message_script(script: &str) -> Result<Vec<Message>, Error> {
-    let mut messages = Vec::new();let mut lines = script.lines().enumerate();
+    let mut messages = Vec::new();
+    let mut lines = script.lines().enumerate();
     while let Some((line, text)) = lines.next() {
         let mut args = text.split_whitespace();
         if let Some(name) = args.next() {
@@ -105,19 +110,12 @@ pub fn parse_message_script(script: &str) -> Result<Vec<Message>, Error> {
             // let name = args.next().ok_or(Error::ScriptName(line))?;
             let end = &name[name.len() - 2..];
             if !end.eq_ignore_ascii_case("::") {
-                return Err(Error::ScriptName(line));
+                return Err(Error::ScriptName(line, ScriptNameReason::Name));
             }
             let name = &name[..name.len() - 2];
-            let at = args.next();
-            if !at
-                .map(|at| at.eq_ignore_ascii_case("@"))
-                .unwrap_or_default()
-            {
-                return Err(Error::ScriptName(line));
-            }
-            let location = args.next().ok_or(Error::ScriptLocation(line))?;
-            let location = Location::from_str_radix(location, 16)
-                .map_err(|err| Error::MalformedLocation(err, line))?;
+            
+            let location = location(&mut args, line)?;
+
             let mut message_pages = Vec::new();
             let mut message_lines = Vec::new();
             'message: loop {
@@ -128,18 +126,20 @@ pub fn parse_message_script(script: &str) -> Result<Vec<Message>, Error> {
                             .next()
                             .ok_or(Error::NoCommand(line))?;
 
-                        let text = text
-                            .split(command)
-                            .last()
-                            .ok_or(Error::NoArguments(line))?;
+                        let text = text.split(command).last().ok_or(Error::NoArguments(line))?;
 
                         let text = text.trim();
 
                         let mut text = text.split("\"");
-                        
+
                         text.next();
 
                         let text = text.next().ok_or(Error::NoArguments(line))?;
+
+                        let text = text.replace("{PLAYER}", "%p");
+
+                        #[deprecated]
+                        let text = text.replace('é', "E");
 
                         if text.contains("$") {
                             let line = text.replace('$', "");
@@ -160,7 +160,6 @@ pub fn parse_message_script(script: &str) -> Result<Vec<Message>, Error> {
                                 message_lines.push(line);
                             }
                         }
-
                     }
                     None => return Err(Error::EndOfFile("message")),
                 }
@@ -180,10 +179,27 @@ pub fn parse_message_script(script: &str) -> Result<Vec<Message>, Error> {
 
 pub type Location = u32;
 
+fn location(args: &mut std::str::SplitWhitespace, line: usize) -> Result<Option<Location>, Error> {
+    let at = args.next();
+    let location = if at
+        .map(|at| at.eq_ignore_ascii_case("@"))
+        .unwrap_or_default()
+    {
+        let location = args.next().ok_or(Error::ScriptLocation(line))?;
+        let location = Location::from_str_radix(location, 16)
+            .map_err(|err| Error::MalformedLocation(err, line))?;
+        Some(location)
+        // return Err(Error::ScriptName(line, ScriptNameReason::At));
+    } else {
+        None
+    };
+    Ok(location)
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Script {
     pub name: String,
-    pub location: Location,
+    pub location: Option<Location>,
     pub commands: Vec<Command>,
 }
 
@@ -196,7 +212,7 @@ pub struct Command {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub name: String,
-    pub location: Location,
+    pub location: Option<Location>,
     pub text: Vec<Vec<String>>,
 }
 
@@ -204,12 +220,18 @@ pub struct Message {
 pub enum Error {
     SetName(usize),
     SetVariable(usize),
-    ScriptName(usize),
+    ScriptName(usize, ScriptNameReason),
     ScriptLocation(usize),
     MalformedLocation(std::num::ParseIntError, usize),
     NoCommand(usize),
     NoArguments(usize),
     EndOfFile(&'static str),
+}
+
+#[derive(Debug)]
+pub enum ScriptNameReason {
+    Name,
+    Location,
 }
 
 impl std::error::Error for Error {}

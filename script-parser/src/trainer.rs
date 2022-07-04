@@ -10,7 +10,9 @@ pub mod party;
 pub struct Trainer {
     pub party_flags: String,
     pub class: String,
-    pub trainer_name: Option<String>,
+    pub music: String,
+    pub pic: String,
+    pub name: Option<String>,
     pub items: Vec<String>,
     pub double_battle: bool,
     /// bitflag
@@ -20,7 +22,7 @@ pub struct Trainer {
 }
 
 pub fn parse_trainers(file: &str) -> Result<HashMap<String, Trainer>, TrainerError> {
-    let mut lines = file.lines().enumerate();
+    let mut lines = file.lines().enumerate().peekable();
 
     lines.next();
 
@@ -62,8 +64,8 @@ pub fn parse_trainers(file: &str) -> Result<HashMap<String, Trainer>, TrainerErr
                                 trainer.party_flags = right.to_owned();
                             }
                             ".trainerClass" => trainer.class = right.to_owned(),
-                            ".encounterMusic_gender" => (),
-                            ".trainerPic" => (),
+                            ".encounterMusic_gender" => trainer.music = right.to_owned(),
+                            ".trainerPic" => trainer.pic = right.to_owned(),
                             // To - do: trainer name
                             ".trainerName" => {
                                 let mut split = right.split('"').skip(1);
@@ -71,7 +73,7 @@ pub fn parse_trainers(file: &str) -> Result<HashMap<String, Trainer>, TrainerErr
                                     TrainerError::FieldParse(line, right.to_owned())
                                 })?;
                                 if name.len() != 0 {
-                                    trainer.trainer_name = Some(name.to_owned());
+                                    trainer.name = Some(name.to_owned());
                                 }
                             }
                             // To - do: items
@@ -138,6 +140,8 @@ pub enum TrainerError {
     NumParse(usize, &'static str, ParseIntError),
     BoolParse(usize, &'static str, ParseBoolError),
     UnknownField(usize, String),
+    UnknownMacro(usize, String),
+    DefineError(usize, &'static str),
 }
 
 impl std::error::Error for TrainerError {}
@@ -154,7 +158,7 @@ impl std::fmt::Display for TrainerError {
             }
             TrainerError::FieldParse(line, text) => write!(
                 f,
-                "Could not parse field at line {} with text {}",
+                "Could not parse field at line {} with text: {}",
                 line, text
             ),
             TrainerError::NumParse(line, field, err) => write!(
@@ -170,6 +174,10 @@ impl std::fmt::Display for TrainerError {
             TrainerError::UnknownField(line, field) => {
                 write!(f, "Found unknown field \"{}\" at line {}", field, line)
             }
+            TrainerError::UnknownMacro(line, macro_) => {
+                write!(f, "Found unknown macro \"{}\" at line {}", macro_, line)
+            }
+            TrainerError::DefineError(line, error) => write!(f, "Cannot parse define macro at {} with error \"{}\"", line, error),
         }
     }
 }

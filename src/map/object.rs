@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize)]
 pub struct JsonObjectEvent {
     pub graphics_id: String,
-    pub x: isize,
-    pub y: isize,
-    pub elevation: isize,
+    pub x: i32,
+    pub y: i32,
+    pub elevation: u8,
     pub movement_type: String,
     pub movement_range_x: u8,
     pub movement_range_y: u8,

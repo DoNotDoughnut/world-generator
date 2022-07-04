@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use hashbrown::HashMap;
 
 use firecore_world_builder::world::{
@@ -57,7 +59,7 @@ pub struct JsonWildPokemon {
 }
 
 impl JsonWildEncounterType {
-    pub fn into(self, pokedex: &BasicDex<Pokemon>) -> WildEntry {
+    pub fn into(self, pokedex: &BasicDex<Pokemon, Arc<Pokemon>>) -> WildEntry {
         WildEntry {
             ratio: self.encounter_rate,
             encounters: self

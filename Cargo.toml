@@ -1,6 +1,6 @@
 [package]
-name = "world-generator"
-version = "0.1.0"
+name = "firecore-world-gen"
+version = "0.0.1"
 edition = "2021"
 
 [profile.dev.package."*"]
@@ -12,23 +12,24 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
-firecore-world-builder = { git = "https://github.com/fiirecore-game/world", rev = "a6f7c7e", package = "firecore-world-builder" }
-# firecore-world-builder = { path = "../../firecore/world/builder" }
+firecore-world-builder = { git = "https://github.com/fiirecore/pokemon-game", rev = "2c67ed2", package = "firecore-world-builder" }
+
+firecore-dex-gen = { git = "https://github.com/fiirecore/pokedex-gen", rev = "dfdc173" }
 
 script-parser = { path = "script-parser" }
 serde = { version = "1", features = ["derive"] }
-# reqwest = { version = "0.11", default-features = false, features = ["json", "blocking"] }
-attohttpc = { version = "0.18", features = ["json"] }
-tinystr = "0.4"
+attohttpc = { version = "0.19", features = ["json"] }
+tinystr = "0.6"
 either = { version = "1", features = ["serde"] }
 rayon = "1"
 dashmap = { version = "5", features = ["serde", "rayon"] }
-hashbrown = { version = "0.9", features = ["rayon"] }
-rand = "0.8"
-
-ron = "0.7"
+hashbrown = { version = "0.12", features = ["rayon"] }
+anyhow = "1"
 serde_json = "1"
-bincode = "1.3"
+
+[dev-dependencies]
+ron = "0.7"
+postcard = { version = "1", features = ["alloc"] }
 
 [workspace]
 members = ["script-parser"]
